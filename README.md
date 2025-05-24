@@ -1,13 +1,11 @@
 # IPTV Stremio Addon
 
-This Stremio addon provides access to IPTV channels using M3U links, leveraging the excellent work of iptv-org and filtering out inactive channels.
+This Stremio addon streams from a single URL: https://app.rcsfacility.com/1.m3u
 
 ## Demo
 
 Try the addon with Greek TV channels:
-[http://a0964931e94e-iptv-stremio.baby-beamup.club/manifest.json](http://a0964931e94e-iptv-stremio.baby-beamup.club/manifest.json)
 
-Note: The server hosting this addon is not located in Greece, so some Greek channels may be unavailable. Only channels accessible from the server's location are included.
 
 ## Features
 
@@ -66,17 +64,7 @@ Configure the addon using these environment variables:
    ```
    Use your local IP instead of `localhost` for network-wide access.
 
-## Docker Deployment
 
-1. Build the image:
-   ```
-   docker build -t iptv-stremio-addon .
-   ```
-
-2. Run the container:
-   ```
-   docker run -p 3000:3000 -e INCLUDE_COUNTRIES=US,UK -e EXCLUDE_CATEGORIES=news -e PROXY_URL=socks5://127.0.0.1:9150 -e FETCH_TIMEOUT=10000 iptv-stremio-addon
-   ```
 
 3. Access at `http://localhost:3000/manifest.json`
 

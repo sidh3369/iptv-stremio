@@ -1,7 +1,7 @@
 {
   "name": "iptv-stremio-addon",
   "version": "1.0.0",
-  "description": "A Stremio add-on that provides access to various IPTV channels using M3U links, leveraging the excellent work of iptv-org.",
+  "description": "A Stremio add-on that streams from a single URL: https://app.rcsfacility.com/1.m3u",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -14,7 +14,7 @@
     "addon",
     "iptv",
     "streaming",
-    "m3u"
+    "vod-stream-url"
   ],
   "author": "Andreas",
   "license": "MIT",
