@@ -1,6 +1,6 @@
 # IPTV Stremio Addon
 
-This Stremio addon streams from a single URL: https://app.rcsfacility.com/1.m3u
+This Stremio addon streams from a single URL:
 
 ## Demo
 
