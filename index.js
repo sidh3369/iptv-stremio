@@ -101,4 +101,4 @@ app.get("/manifest.json", (req, res) => {
 });
 
 // Serve the add-on
-serveHTTP(addon.getInterface(), { server: app, path: "/manifest.json", port: PORT });
+serveHTTP(addon.getInterface(), { server: app, path: "/manifest.json", port: PORT, hostname: "0.0.0.0" });
