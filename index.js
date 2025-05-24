@@ -3,7 +3,7 @@ const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const express = require("express");
 
 const PORT = process.env.PORT || 3000;
-const VOD_PLAYLIST_URL = "https://app.rcsfacility.com/1.m3u"; // Your video playlist URL
+const VOD_PLAYLIST_URL = "https://hr.gogasecurityforce.com/1.m3u"; // Your video playlist URL
 
 // Manifest
 const manifest = {
