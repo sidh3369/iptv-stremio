@@ -265,3 +265,9 @@ serveHTTP(builder.getInterface(), { server: app, port: PORT, hostname: "0.0.0.0"
 app.listen(PORT, () => {
     console.log(`Addon running on port ${PORT}. Configure at http://localhost:${PORT}/configure.html`);
 });
+{
+  "stremioAddonsConfig": {
+    "issuer": "https://stremio-addons.net",
+    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
+  }
+}
