@@ -1,45 +1,35 @@
 {
-  "name": "iptv-stremio-addon",
-  "version": "1.0.0",
-  "description": "A Stremio add-on that streams from a single URL: https://app.rcsfacility.com/1.m3u",
+  "name": "sid-vod-playlist",
+  "version": "1.0.6",
+  "description": "Stremio addon for personal M3U playlists with reload and multiple link support",
   "main": "index.js",
+  "private": true,
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "jest",
-    "lint": "eslint ."
+    "dev": "nodemon index.js"
   },
   "keywords": [
     "stremio",
     "addon",
+    "m3u",
     "iptv",
-    "streaming",
-    "vod-stream-url"
+    "vod"
   ],
-  "author": "Andreas",
+  "author": "Shailesh Patel (@sidh3369)",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.7.7",
     "express": "^4.21.0",
-    "http-proxy-agent": "^5.0.0",
-    "node-cache": "^5.1.2",
-    "socks-proxy-agent": "^7.0.0",
     "stremio-addon-sdk": "^1.6.10"
   },
   "devDependencies": {
-    "eslint": "^8.40.0",
-    "jest": "^29.5.0",
-    "nodemon": "^3.1.4",
-    "path-to-regexp": "^0.1.11"
+    "nodemon": "^3.1.4"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tsaridas/iptv-stremio-addon.git"
-  },
-  "bugs": {
-    "url": "https://github.com/tsaridas/iptv-stremio-addon/issues"
+    "url": "https://github.com/sidh3369/iptv-stremio-addon.git"
   }
 }
