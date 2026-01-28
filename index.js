@@ -6,25 +6,21 @@ const bodyParser = require("body-parser");
 const PORT = process.env.PORT || 3000;
 const DEFAULT_VOD_PLAYLIST_URL = "https://raw.githubusercontent.com/sidh3369/m3u_bot/main/1.m3u";
 
-// In-memory storage for multiple M3U URLs (starts with default)
 let playlistUrls = [DEFAULT_VOD_PLAYLIST_URL];
 
-// Manifest (with added stremioAddonsConfig for signature)
 const manifest = {
     id: "org.vodplaylist",
-    version: "1.0.3",
+    version: "1.0.4",           // ← bump version so you know it's the new one
     name: "SID VOD Playlist",
-    description: "Watch your personal video playlist with reload and configure options",
+    description: "Personal M3U playlist with reload & multiple links",
     resources: ["catalog", "meta", "stream"],
     types: ["movie"],
-    catalogs: [
-        {
-            type: "movie",
-            id: "vod-playlist",
-            name: "My VOD Playlist",
-            extra: []
-        }
-    ],
+    catalogs: [{
+        type: "movie",
+        id: "vod-playlist",
+        name: "My VOD Playlist",
+        extra: []
+    }],
     idPrefixes: ["vod-"],
     logo: "https://dl.strem.io/addon-logo.png",
     icon: "https://dl.strem.io/addon-logo.png",
@@ -33,7 +29,7 @@ const manifest = {
         configurable: true,
         configurationRequired: false
     },
-    stremioAddonsConfig: { // <-- Added here
+    stremioAddonsConfig: {
         issuer: "https://stremio-addons.net",
         signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
     }
@@ -143,127 +139,49 @@ builder.defineStreamHandler(async (args) => {
     }
     return { streams: [] };
 });
-
 // Set up server
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Reload endpoint (optional)
+// ─── Important fix: redirect /configure → /configure.html ───
+app.get("/configure", (req, res) => {
+    res.redirect("/configure.html");
+});
+
+// Your existing routes
+app.get("/configure.html", (req, res) => {
+    // ... your current configure.html code ...
+});
+
+app.post("/save-config", (req, res) => {
+    // ... your current save-config code ...
+});
+
 app.get("/reload", async (req, res) => {
     await fetchPlaylist(true);
     res.send("Playlists reloaded successfully!");
 });
 
-// Configure page: HTML form to add/remove M3U URLs
-app.get("/configure.html", (req, res) => {
-    let urlList = playlistUrls.map((url, index) => `
-        <li>
-            ${url} <button type="button" onclick="removeUrl(${index})">Remove</button>
-        </li>
-    `).join("");
-
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Configure Playlists</title>
-            <script>
-                let urlCounter = ${playlistUrls.length};
-                function addUrlField() {
-                    const container = document.getElementById('url-container');
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.name = \`url\${urlCounter}\`;
-                    input.placeholder = 'Enter M3U URL';
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.textContent = 'Remove';
-                    removeBtn.onclick = () => container.removeChild(input.parentNode);
-                    const div = document.createElement('div');
-                    div.appendChild(input);
-                    div.appendChild(removeBtn);
-                    container.appendChild(div);
-                    urlCounter++;
-                }
-                function removeUrl(index) {
-                    document.getElementById('remove-' + index).value = 'true';
-                    document.forms[0].submit();
-                }
-            </script>
-        </head>
-        <body>
-            <h1>Configure M3U Playlists</h1>
-            <form action="/save-config" method="POST">
-                <h2>Current Playlists:</h2>
-                <ul>
-                    ${urlList}
-                </ul>
-                <h2>Add New Playlists:</h2>
-                <div id="url-container"></div>
-                <button type="button" onclick="addUrlField()">Add URL</button>
-                <br><br>
-                <input type="submit" value="Save Changes">
-            </form>
-            <script>
-                // Hidden inputs for removals (simplified, submit form on remove)
-                const form = document.forms[0];
-                ${playlistUrls.map((_, index) => `
-                    const removeInput${index} = document.createElement('input');
-                    removeInput${index}.type = 'hidden';
-                    removeInput${index}.name = 'remove-${index}';
-                    removeInput${index}.id = 'remove-${index}';
-                    removeInput${index}.value = 'false';
-                    form.appendChild(removeInput${index});
-                `).join("")}
-            </script>
-        </body>
-        </html>
-    `);
-});
-
-// Save config: Update playlistUrls based on form data
-app.post("/save-config", (req, res) => {
-    let newUrls = [...playlistUrls];
-
-    // Handle removals
-    for (let i = 0; i < playlistUrls.length; i++) {
-        if (req.body[`remove-${i}`] === 'true') {
-            newUrls.splice(i, 1);
-        }
-    }
-
-    // Add new URLs
-    Object.keys(req.body).forEach(key => {
-        if (key.startsWith('url') && req.body[key].trim()) {
-            newUrls.push(req.body[key].trim());
-        }
-    });
-
-    // Remove duplicates
-    playlistUrls = [...new Set(newUrls)];
-
-    // Force reload after config change
-    fetchPlaylist(true);
-
-    res.send("Configuration saved! You can close this page and refresh the catalog in Stremio.");
-});
-
-// Simple root page (optional)
 app.get("/", (req, res) => {
     res.send(`
         <!DOCTYPE html>
         <html>
         <body>
             <h1>SID VOD Playlist</h1>
-            <a href="/configure.html">Configure Playlists</a><br>
+            <a href="/configure.html">Configure (add M3U links)</a><br>
             <a href="/reload">Reload Playlists</a>
         </body>
         </html>
     `);
 });
 
-// Serve the addon at root (this starts the server, no need for separate app.listen)
-serveHTTP(builder.getInterface(), { server: app, port: PORT, hostname: "0.0.0.0" });
+// Start the addon server (this also starts the HTTP listener)
+serveHTTP(builder.getInterface(), {
+    server: app,
+    port: PORT,
+    hostname: "0.0.0.0"
+});
 
-console.log(`Addon running on port ${PORT}. Configure at http://localhost:${PORT}/configure.html`);
+console.log(`Addon running on port ${PORT}`);
+console.log(`Configure page: http://localhost:${PORT}/configure.html`);
