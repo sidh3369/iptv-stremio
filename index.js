@@ -265,9 +265,32 @@ serveHTTP(builder.getInterface(), { server: app, port: PORT, hostname: "0.0.0.0"
 app.listen(PORT, () => {
     console.log(`Addon running on port ${PORT}. Configure at http://localhost:${PORT}/configure.html`);
 });
-{
-  "stremioAddonsConfig": {
-    "issuer": "https://stremio-addons.net",
-    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
-  }
-}
+// Manifest (with added stremioAddonsConfig for signature)
+const manifest = {
+    id: "org.vodplaylist",
+    version: "1.0.3",
+    name: "SID VOD Playlist",
+    description: "Watch your personal video playlist with reload and configure options",
+    resources: ["catalog", "meta", "stream"],
+    types: ["movie"],
+    catalogs: [
+        {
+            type: "movie",
+            id: "vod-playlist",
+            name: "My VOD Playlist",
+            extra: []
+        }
+    ],
+    idPrefixes: ["vod-"],
+    logo: "https://dl.strem.io/addon-logo.png",
+    icon: "https://dl.strem.io/addon-logo.png",
+    background: "https://dl.strem.io/addon-background.jpg",
+    behaviorHints: {
+        configurable: true,
+        configurationRequired: false
+    },
+    stremioAddonsConfig: {  // <-- Added here
+        issuer: "https://stremio-addons.net",
+        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
+    }
+};
