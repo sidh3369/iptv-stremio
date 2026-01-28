@@ -3,7 +3,7 @@ const express = require("express");
 const axios = require("axios");
 
 const PORT = process.env.PORT || 3000;
-const TMDB_API_KEY = "PASTE_YOUR_TMDB_API_KEY_HERE"; // 🔴 REQUIRED
+const TMDB_API_KEY = "e41a38ce73e703a8de9b152992f78279"; // 🔴 REQUIRED
 
 // Cache per playlist URL
 const playlistCache = new Map();
