@@ -2,128 +2,142 @@ const { addonBuilder, serveHTTP } = require("stremio-addon-sdk");
 const express = require("express");
 const axios = require("axios");
 
-const PORT = process.env.PORT || 3000;
-const DEFAULT_PLAYLIST = "https://raw.githubusercontent.com/sidh3369/m3u_bot/main/1.m3u";
+const PORT = process.env.PORT || 10000;
 
-let playlistCache = { time: 0, data: null };
-const CACHE_DURATION = 5 * 60 * 1000;
+/* ================= SETTINGS ================= */
 
-// ---------------- FETCH M3U ----------------
-async function fetchPlaylist(force = false) {
-    const now = Date.now();
+const DEFAULT_PLAYLIST = "https://raw.githubusercontent.com/sidh3369/m3u_bot/main/1.m3u"; // ALWAYS LOADS
+const CACHE_TIME = 5 * 60 * 1000;
 
-    if (!force && playlistCache.data && now - playlistCache.time < CACHE_DURATION) {
-        return playlistCache.data;
-    }
+let cache = { time: 0, episodes: [], byId: new Map() };
 
-    const res = await axios.get(DEFAULT_PLAYLIST, { timeout: 10000 });
-    const lines = res.data.split(/\r?\n/);
+/* ================= FETCH PLAYLIST ================= */
 
-    let episodes = [];
-    let byId = new Map();
-    let title = "";
-    let epNum = 1;
+async function parseM3U(url) {
+    try {
+        const res = await axios.get(url, { timeout: 15000 });
+        const lines = res.data.split(/\r?\n/);
 
-    for (let line of lines) {
-        line = line.trim();
+        let episodes = [];
+        let byId = new Map();
+        let title = "";
+        let ep = 1;
 
-        if (line.startsWith("#EXTINF:")) {
-            title = line.split(",")[1] || `Episode ${epNum}`;
-        } else if (line && !line.startsWith("#")) {
-            const id = `ep-${epNum}`;
+        for (let line of lines) {
+            line = line.trim();
 
-            const meta = {
-                id,
-                name: title,
-                season: 1,
-                episode: epNum,
-                url: line,
-                released: new Date().toISOString()
-            };
-
-            episodes.push(meta);
-            byId.set(id, meta);
-            epNum++;
+            if (line.startsWith("#EXTINF:")) {
+                title = line.split(",")[1] || `Video ${ep}`;
+            } else if (line && !line.startsWith("#")) {
+                const id = `ep-${ep}`;
+                const meta = {
+                    id,
+                    name: title,
+                    season: 1,
+                    episode: ep,
+                    url: line
+                };
+                episodes.push(meta);
+                byId.set(id, meta);
+                ep++;
+            }
         }
+        return { episodes, byId };
+    } catch (e) {
+        console.log("M3U Fetch Failed:", e.message);
+        return { episodes: [], byId: new Map() };
     }
-
-    const data = { episodes, byId };
-    playlistCache = { time: now, data };
-    return data;
 }
 
-// ---------------- MANIFEST ----------------
+async function loadPlaylists(userUrl, force = false) {
+    const now = Date.now();
+    if (!force && now - cache.time < CACHE_TIME) return cache;
+
+    const def = await parseM3U(DEFAULT_PLAYLIST);
+    let user = { episodes: [], byId: new Map() };
+
+    if (userUrl) user = await parseM3U(userUrl);
+
+    const episodes = [...def.episodes, ...user.episodes];
+    const byId = new Map([...def.byId, ...user.byId]);
+
+    cache = { time: now, episodes, byId };
+    return cache;
+}
+
+/* ================= MANIFEST ================= */
+
 const manifest = {
-    id: "org.sid.autoplayseries",
-    version: "1.1.1",
-    name: "SID Autoplay Playlist",
-    description: "Autoplay personal video playlist",
+    id: "org.sid.autoplay",
+    version: "2.0.0",
+    name: "SID Autoplay Series",
+    description: "Personal autoplay playlist with reload",
     resources: ["catalog", "meta", "stream"],
     types: ["series"],
-    catalogs: [
+    catalogs: [{ type: "series", id: "sid-series", name: "My Playlist" }],
+    behaviorHints: { configurable: true },
+    config: [
         {
-            type: "series",
-            id: "sid-playlist",
-            name: "My Playlist"
+            key: "userM3U",
+            type: "text",
+            title: "Your M3U Playlist URL (Optional)"
         }
     ]
 };
 
 const builder = new addonBuilder(manifest);
 
-// ---------------- CATALOG ----------------
-builder.defineCatalogHandler(() => ({
+/* ================= CATALOG ================= */
+
+builder.defineCatalogHandler(async () => ({
     metas: [{
-        id: "sid-playlist",
+        id: "sid-series",
         type: "series",
         name: "My Video Playlist",
         poster: "https://dl.strem.io/addon-logo.png"
     }]
 }));
 
-// ---------------- META ----------------
-builder.defineMetaHandler(async ({ id }) => {
-    if (id !== "sid-playlist") return { meta: null };
+/* ================= META (EPISODES LIST) ================= */
 
-    const data = await fetchPlaylist();
+builder.defineMetaHandler(async ({ id, config }) => {
+    if (id !== "sid-series") return { meta: null };
+
+    const data = await loadPlaylists(config?.userM3U);
 
     return {
         meta: {
-            id: "sid-playlist",
+            id: "sid-series",
             type: "series",
             name: "My Video Playlist",
             videos: [
-                {
-                    id: "reload",
+                { id: "reload", season: 1, episode: 0, title: "🔄 RELOAD PLAYLIST" },
+                ...data.episodes.map(e => ({
+                    id: e.id,
                     season: 1,
-                    episode: 0,
-                    title: "🔄 RELOAD"
-                },
-                ...data.episodes.map(ep => ({
-                    id: ep.id,
-                    season: 1,
-                    episode: ep.episode,
-                    title: ep.name
+                    episode: e.episode,
+                    title: e.name
                 }))
             ]
         }
     };
 });
 
-// ---------------- STREAM ----------------
-builder.defineStreamHandler(async ({ id }) => {
+/* ================= STREAM ================= */
+
+builder.defineStreamHandler(async ({ id, config }) => {
 
     if (id === "reload") {
-        await fetchPlaylist(true);
+        await loadPlaylists(config?.userM3U, true);
         return {
             streams: [{
-                title: "Playlist Reloaded. Open again.",
-                url: "https://placeholdervideo.dev/1920x1080"
+                title: "Playlist Reloaded ✔ Open series again",
+                url: "https://archive.org/download/blank-video-file/blank.mp4"
             }]
         };
     }
 
-    const data = await fetchPlaylist();
+    const data = await loadPlaylists(config?.userM3U);
     const ep = data.byId.get(id);
     if (!ep) return { streams: [] };
 
@@ -136,10 +150,19 @@ builder.defineStreamHandler(async ({ id }) => {
     };
 });
 
-// ---------------- SERVER ----------------
+/* ================= SERVER ================= */
+
 const app = express();
 serveHTTP(builder.getInterface(), { app });
 
-app.listen(PORT, () => {
-    console.log("Addon running on port", PORT);
+app.get("/", (req, res) => {
+    res.send(`
+        <h2>SID Autoplay Series Addon</h2>
+        <a href="stremio://${req.headers.host}/manifest.json">INSTALL IN STREMIO</a><br><br>
+        <a href="https://web.stremio.com/#/addons?addon=${encodeURIComponent(`https://${req.headers.host}/manifest.json`)}">
+        INSTALL IN WEB STREMIO
+        </a>
+    `);
 });
+
+app.listen(PORT, () => console.log("Addon running on port", PORT));
