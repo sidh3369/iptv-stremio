@@ -6,15 +6,15 @@ const bodyParser = require("body-parser");
 const PORT = process.env.PORT || 3000;
 const DEFAULT_VOD_PLAYLIST_URL = "https://raw.githubusercontent.com/sidh3369/m3u_bot/main/1.m3u";
 
-// In-memory storage for multiple M3U URLs
+// In-memory list of M3U URLs
 let playlistUrls = [DEFAULT_VOD_PLAYLIST_URL];
 
-// Manifest
+// Manifest - disabled configurable to avoid /configure error
 const manifest = {
     id: "org.vodplaylist",
-    version: "1.0.5", // Bumped version
+    version: "1.0.6", // bumped version
     name: "SID VOD Playlist",
-    description: "Personal M3U playlist viewer with reload & multiple links support",
+    description: "Personal M3U playlist viewer - add links via browser at addon root URL",
     resources: ["catalog", "meta", "stream"],
     types: ["movie"],
     catalogs: [
@@ -30,7 +30,7 @@ const manifest = {
     icon: "https://dl.strem.io/addon-logo.png",
     background: "https://dl.strem.io/addon-background.jpg",
     behaviorHints: {
-        configurable: true,
+        configurable: false,          // ← disabled to stop /configure 404 error
         configurationRequired: false
     },
     stremioAddonsConfig: {
@@ -43,7 +43,7 @@ const builder = new addonBuilder(manifest);
 
 let cachedMetas = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 600000; // 10 min
+const CACHE_DURATION = 600000; // 10 minutes
 
 async function fetchPlaylist(force = false) {
     const now = Date.now();
@@ -90,7 +90,7 @@ async function fetchPlaylist(force = false) {
                 }
             }
         } catch (e) {
-            console.error(`Error fetching ${url}:`, e.message);
+            console.error(`Fetch error ${url}: ${e.message}`);
         }
     }
 
@@ -99,7 +99,7 @@ async function fetchPlaylist(force = false) {
     return allMetas;
 }
 
-// Catalog handler
+// Catalog - add reload dummy item at top
 builder.defineCatalogHandler(async () => {
     let metas = await fetchPlaylist();
     const reloadItem = {
@@ -107,20 +107,20 @@ builder.defineCatalogHandler(async () => {
         name: "↻ Reload Playlists",
         type: "movie",
         poster: "https://dl.strem.io/addon-logo.png",
-        description: "Click → Play blank video → wait 5-10 sec → stop → pull-to-refresh catalog to see updated M3U content"
+        description: "Play this → wait 5-10 sec → stop → pull-to-refresh catalog to update M3U content"
     };
     metas = [reloadItem, ...metas];
     return { metas };
 });
 
-// Meta handler
+// Meta
 builder.defineMetaHandler(async ({ id }) => {
     if (id === "reload") {
         return { meta: {
             id: "reload",
             name: "↻ Reload Playlists",
             type: "movie",
-            description: "Plays a blank video while reloading all M3U links. After playback, stop and pull-to-refresh the catalog list.",
+            description: "Plays blank video while reloading. Stop playback & pull-to-refresh catalog.",
             poster: "https://dl.strem.io/addon-logo.png"
         } };
     }
@@ -129,16 +129,14 @@ builder.defineMetaHandler(async ({ id }) => {
     return { meta: meta || {} };
 });
 
-// Stream handler
+// Stream
 builder.defineStreamHandler(async ({ id }) => {
     if (id === "reload") {
-        await fetchPlaylist(true); // Force reload on play
-        return { 
-            streams: [{
-                url: "https://placeholdervideo.dev/1920x1080",
-                title: "Reloading... (stop & refresh catalog after)"
-            }]
-        };
+        await fetchPlaylist(true); // force reload
+        return { streams: [{
+            url: "https://placeholdervideo.dev/1920x1080",
+            title: "Reloading... stop & refresh catalog"
+        }] };
     }
 
     const metas = await fetchPlaylist();
@@ -149,21 +147,20 @@ builder.defineStreamHandler(async ({ id }) => {
     return { streams: [] };
 });
 
-// Express app
+// Express server
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Fix: Stremio requests /configure → redirect to your HTML page
-app.get("/configure", (req, res) => {
-    res.redirect("/configure.html");
-});
-
-// Your config page (keep your existing code here)
-app.get("/configure.html", (req, res) => {
-    let urlList = playlistUrls.map((url, index) => `
+// Root page - now with add/remove M3U form (no /configure needed)
+app.get("/", (req, res) => {
+    let urlListHtml = playlistUrls.map((url, i) => `
         <li>
-            ${url} <button type="button" onclick="removeUrl(${index})">Remove</button>
+            <a href="${url}" target="_blank">${url}</a>
+            <form style="display:inline;" method="POST" action="/remove">
+                <input type="hidden" name="index" value="${i}">
+                <button type="submit">Remove</button>
+            </form>
         </li>
     `).join("");
 
@@ -171,93 +168,57 @@ app.get("/configure.html", (req, res) => {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Configure Playlists</title>
-            <script>
-                let urlCounter = ${playlistUrls.length};
-                function addUrlField() {
-                    const container = document.getElementById('url-container');
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.name = \`url\${urlCounter}\`;
-                    input.placeholder = 'Enter M3U URL';
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.textContent = 'Remove';
-                    removeBtn.onclick = () => container.removeChild(input.parentNode);
-                    const div = document.createElement('div');
-                    div.appendChild(input);
-                    div.appendChild(removeBtn);
-                    container.appendChild(div);
-                    urlCounter++;
-                }
-                function removeUrl(index) {
-                    document.getElementById('remove-' + index).value = 'true';
-                    document.forms[0].submit();
-                }
-            </script>
+            <title>SID VOD Playlist Manager</title>
+            <style>body { font-family: Arial; padding: 20px; } ul { list-style: none; padding: 0; } li { margin: 10px 0; }</style>
         </head>
         <body>
-            <h1>Configure M3U Playlists</h1>
-            <form action="/save-config" method="POST">
-                <h2>Current Playlists:</h2>
-                <ul>${urlList}</ul>
-                <h2>Add New Playlists:</h2>
-                <div id="url-container"></div>
-                <button type="button" onclick="addUrlField()">Add URL</button>
-                <br><br>
-                <input type="submit" value="Save Changes">
+            <h1>SID VOD Playlist</h1>
+            <p>Add M3U links below. Changes apply after reload in Stremio (or play "↻ Reload Playlists" item).</p>
+            
+            <h2>Current M3U Links</h2>
+            <ul>${urlListHtml || "<li>No custom links yet</li>"}</ul>
+            
+            <h2>Add New M3U Link</h2>
+            <form method="POST" action="/add">
+                <input type="text" name="url" placeholder="https://example.com/playlist.m3u" style="width: 300px;" required>
+                <button type="submit">Add Link</button>
             </form>
-            <script>
-                const form = document.forms[0];
-                ${playlistUrls.map((_, index) => `
-                    const removeInput${index} = document.createElement('input');
-                    removeInput${index}.type = 'hidden';
-                    removeInput${index}.name = 'remove-${index}';
-                    removeInput${index}.id = 'remove-${index}';
-                    removeInput${index}.value = 'false';
-                    form.appendChild(removeInput${index});
-                `).join("")}
-            </script>
+            
+            <br>
+            <a href="/reload">Force Reload All Playlists Now</a>
+            
+            <p><strong>Stremio Install URL:</strong> https://iptv-stremio.onrender.com/manifest.json</p>
         </body>
         </html>
     `);
 });
 
-// Save config
-app.post("/save-config", (req, res) => {
-    let newUrls = [...playlistUrls];
-
-    // Removals
-    for (let i = playlistUrls.length - 1; i >= 0; i--) {
-        if (req.body[`remove-${i}`] === 'true') {
-            newUrls.splice(i, 1);
-        }
+// Add new URL
+app.post("/add", (req, res) => {
+    const newUrl = req.body.url?.trim();
+    if (newUrl && !playlistUrls.includes(newUrl)) {
+        playlistUrls.push(newUrl);
     }
-
-    // Add new
-    Object.keys(req.body).forEach(key => {
-        if (key.startsWith('url') && req.body[key]?.trim()) {
-            newUrls.push(req.body[key].trim());
-        }
-    });
-
-    playlistUrls = [...new Set(newUrls.filter(u => u))];
-
-    fetchPlaylist(true); // Reload after save
-
-    res.send("Saved! Close this & pull-to-refresh catalog in Stremio.");
+    res.redirect("/");
 });
 
-// Optional root page
-app.get("/", (req, res) => {
-    res.send(`
-        <h1>SID VOD Playlist</h1>
-        <a href="/configure.html">Add/Configure M3U Links</a><br>
-        <a href="/reload">Reload (force fetch)</a>
-    `);
+// Remove URL
+app.post("/remove", (req, res) => {
+    const index = parseInt(req.body.index, 10);
+    if (!isNaN(index) && index >= 0 && index < playlistUrls.length) {
+        playlistUrls.splice(index, 1);
+    }
+    res.redirect("/");
 });
 
-// Start addon server
+// Reload endpoint (for manual browser reload)
+app.get("/reload", async (req, res) => {
+    await fetchPlaylist(true);
+    res.send("Playlists reloaded! Return to Stremio and pull-to-refresh catalog.");
+});
+
+// Start addon
 serveHTTP(builder.getInterface(), { server: app, port: PORT, hostname: "0.0.0.0" });
 
-console.log(`Addon live on port ${PORT}`);
+console.log(`Addon running on port ${PORT}`);
+console.log(`Manager page: http://localhost:${PORT}/`);
