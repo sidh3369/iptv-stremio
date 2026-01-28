@@ -9,10 +9,10 @@ const DEFAULT_VOD_PLAYLIST_URL = "https://raw.githubusercontent.com/sidh3369/m3u
 // In-memory storage for multiple M3U URLs (starts with default)
 let playlistUrls = [DEFAULT_VOD_PLAYLIST_URL];
 
-// Manifest (added configurable: true to show configure button in Stremio addons list)
+// Manifest (with added stremioAddonsConfig for signature)
 const manifest = {
     id: "org.vodplaylist",
-    version: "1.0.3", // Bumped for changes
+    version: "1.0.3",
     name: "SID VOD Playlist",
     description: "Watch your personal video playlist with reload and configure options",
     resources: ["catalog", "meta", "stream"],
@@ -30,8 +30,12 @@ const manifest = {
     icon: "https://dl.strem.io/addon-logo.png",
     background: "https://dl.strem.io/addon-background.jpg",
     behaviorHints: {
-        configurable: true, // Enables configure gear icon in Stremio
+        configurable: true,
         configurationRequired: false
+    },
+    stremioAddonsConfig: { // <-- Added here
+        issuer: "https://stremio-addons.net",
+        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
     }
 };
 
@@ -259,9 +263,7 @@ app.get("/", (req, res) => {
     `);
 });
 
-// Serve the addon at root
+// Serve the addon at root (this starts the server, no need for separate app.listen)
 serveHTTP(builder.getInterface(), { server: app, port: PORT, hostname: "0.0.0.0" });
 
-app.listen(PORT, () => {
-    console.log(`Addon running on port ${PORT}. Configure at http://localhost:${PORT}/configure.html`);
-});
+console.log(`Addon running on port ${PORT}. Configure at http://localhost:${PORT}/configure.html`);
