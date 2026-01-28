@@ -3,162 +3,150 @@ const express = require("express");
 const axios = require("axios");
 
 const PORT = process.env.PORT || 3000;
-const TMDB_API_KEY = "e41a38ce73e703a8de9b152992f78279"; // 🔴 REQUIRED
+const DEFAULT_PLAYLIST = "https://raw.githubusercontent.com/sidh3369/m3u_bot/main/1.m3u";
 
-// Cache per playlist URL
-const playlistCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const playlistCache = new Map();
 
-// -------- TMDB POSTER FETCH ----------
-async function getTMDBPoster(title) {
-    try {
-        const url = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`;
-        const res = await axios.get(url, { timeout: 5000 });
-
-        if (res.data.results && res.data.results.length > 0) {
-            return "https://image.tmdb.org/t/p/w500" + res.data.results[0].poster_path;
-        }
-    } catch (e) {}
-    return "https://dl.strem.io/addon-logo.png";
-}
-
-// -------- PLAYLIST PARSER ----------
-async function fetchPlaylist(playlistUrl) {
+// -------- FETCH & PARSE PLAYLIST AS EPISODES --------
+async function fetchPlaylist(url) {
     const now = Date.now();
-    const cached = playlistCache.get(playlistUrl);
+    const cached = playlistCache.get(url);
 
     if (cached && now - cached.time < CACHE_DURATION) {
         return cached.data;
     }
 
     try {
-        const res = await axios.get(playlistUrl, { timeout: 10000 });
+        const res = await axios.get(url, { timeout: 10000 });
         const lines = res.data.split(/\r?\n/);
 
+        let episodes = [];
         let byId = new Map();
-        let catalogs = {};
-        let currentMeta = {};
-        let idCounter = 1;
+        let title = "";
+        let episodeNumber = 1;
 
         for (let line of lines) {
             line = line.trim();
 
             if (line.startsWith("#EXTINF:")) {
-                const name = line.split(",")[1] || `Video ${idCounter}`;
-                const groupMatch = line.match(/group-title="([^"]+)"/);
+                title = line.split(",")[1] || `Episode ${episodeNumber}`;
+            } else if (line && !line.startsWith("#")) {
+                const id = `ep-${episodeNumber}`;
 
-                currentMeta = {
-                    id: `vod-${idCounter}`,
-                    name: name.trim(),
-                    type: "movie",
-                    description: name.trim(),
-                    genre: groupMatch ? groupMatch[1].trim() : "Other"
+                const meta = {
+                    id,
+                    type: "series",
+                    name: title.trim(),
+                    season: 1,
+                    episode: episodeNumber,
+                    url: line,
+                    released: new Date().toISOString()
                 };
 
-            } else if (line && !line.startsWith("#")) {
-                if (currentMeta.id) {
-                    currentMeta.url = line;
-
-                    // Fetch TMDB poster
-                    currentMeta.poster = await getTMDBPoster(currentMeta.name);
-                    currentMeta.background = currentMeta.poster;
-
-                    byId.set(currentMeta.id, currentMeta);
-
-                    if (!catalogs[currentMeta.genre]) catalogs[currentMeta.genre] = [];
-                    catalogs[currentMeta.genre].push(currentMeta);
-
-                    idCounter++;
-                    currentMeta = {};
-                }
+                episodes.push(meta);
+                byId.set(id, meta);
+                episodeNumber++;
             }
         }
 
-        const data = { byId, catalogs };
-        playlistCache.set(playlistUrl, { time: now, data });
+        const data = { episodes, byId };
+        playlistCache.set(url, { time: now, data });
         return data;
 
     } catch (e) {
         console.log("Playlist error:", e.message);
-        return cached ? cached.data : { byId: new Map(), catalogs: {} };
+        return cached ? cached.data : { episodes: [], byId: new Map() };
     }
 }
 
-// -------- MANIFEST TEMPLATE ----------
-function getManifest(config) {
+// -------- MANIFEST --------
+function getManifest() {
     return {
-        id: "org.vodplaylist.tmdb",
-        version: "3.0.0",
-        name: "SID VOD Playlist Ultimate",
-        description: "Paste your M3U URL and get posters + categories",
+        id: "org.sid.autoplayseries",
+        version: "1.0.0",
+        name: "SID Autoplay Playlist",
+        description: "Continuous autoplay playlist — like a personal TV channel",
         resources: ["catalog", "meta", "stream"],
-        types: ["movie"],
-        idPrefixes: ["vod-"],
-        catalogs: [],
+        types: ["series"],
+        idPrefixes: ["ep-", "sid-playlist"],
+        catalogs: [{
+            type: "series",
+            id: "sid-playlist",
+            name: "My Playlist"
+        }],
         behaviorHints: { configurable: true },
-        config: [
-            {
-                key: "playlistUrl",
-                type: "text",
-                title: "Paste your M3U Playlist URL"
-            }
-        ]
+        config: [{
+            key: "playlistUrl",
+            type: "text",
+            title: "Optional: Paste your M3U Playlist URL"
+        }]
     };
 }
 
 const builder = new addonBuilder(getManifest());
 
-// -------- CATALOG HANDLER ----------
-builder.defineCatalogHandler(async ({ id, config }) => {
-    if (!config.playlistUrl) return { metas: [] };
-
-    const data = await fetchPlaylist(config.playlistUrl);
-    return { metas: data.catalogs[id] || [] };
-});
-
-// -------- META HANDLER ----------
-builder.defineMetaHandler(async ({ id, config }) => {
-    if (!config.playlistUrl) return { meta: {} };
-
-    const data = await fetchPlaylist(config.playlistUrl);
-    return { meta: data.byId.get(id) || {} };
-});
-
-// -------- STREAM HANDLER ----------
-builder.defineStreamHandler(async ({ id, config }) => {
-    if (!config.playlistUrl) return { streams: [] };
-
-    const data = await fetchPlaylist(config.playlistUrl);
-    const meta = data.byId.get(id);
-
-    if (!meta) return { streams: [] };
-
+// -------- CATALOG HANDLER (SHOW SINGLE SERIES) --------
+builder.defineCatalogHandler(async () => {
     return {
-        streams: [{
-            title: meta.name,
-            url: meta.url,
-            behaviorHints: { notWebReady: meta.url.includes(".m3u8") }
+        metas: [{
+            id: "sid-playlist",
+            type: "series",
+            name: "My Video Playlist",
+            poster: "https://dl.strem.io/addon-logo.png",
+            background: "https://dl.strem.io/addon-background.jpg",
+            description: "All your videos play automatically one after another"
         }]
     };
 });
 
-// -------- EXPRESS SERVER ----------
-const app = express();
+// -------- META HANDLER (LIST EPISODES) --------
+builder.defineMetaHandler(async ({ id, config }) => {
+    if (id !== "sid-playlist") return { meta: {} };
 
-app.get("/manifest.json", async (req, res) => {
-    const playlistUrl = req.query.playlistUrl;
-
-    if (!playlistUrl) return res.json(getManifest());
-
+    const playlistUrl = config.playlistUrl || DEFAULT_PLAYLIST;
     const data = await fetchPlaylist(playlistUrl);
 
-    const catalogs = Object.keys(data.catalogs).map(cat => ({
-        type: "movie",
-        id: cat,
-        name: cat
-    }));
+    return {
+        meta: {
+            id: "sid-playlist",
+            type: "series",
+            name: "My Video Playlist",
+            poster: "https://dl.strem.io/addon-logo.png",
+            background: "https://dl.strem.io/addon-background.jpg",
+            videos: data.episodes.map(ep => ({
+                id: ep.id,
+                season: 1,
+                episode: ep.episode,
+                title: ep.name,
+                released: ep.released
+            }))
+        }
+    };
+});
 
-    res.json({ ...getManifest(), catalogs });
+// -------- STREAM HANDLER --------
+builder.defineStreamHandler(async ({ id, config }) => {
+    const playlistUrl = config.playlistUrl || DEFAULT_PLAYLIST;
+    const data = await fetchPlaylist(playlistUrl);
+    const ep = data.byId.get(id);
+
+    if (!ep) return { streams: [] };
+
+    return {
+        streams: [{
+            title: ep.name,
+            url: ep.url,
+            behaviorHints: { notWebReady: ep.url.includes(".m3u8") }
+        }]
+    };
+});
+
+// -------- SERVER --------
+const app = express();
+
+app.get("/manifest.json", (req, res) => {
+    res.json(getManifest());
 });
 
 serveHTTP(builder.getInterface(), {
