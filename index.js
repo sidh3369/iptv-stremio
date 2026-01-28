@@ -9,10 +9,10 @@ const DEFAULT_VOD_PLAYLIST_URL = "https://raw.githubusercontent.com/sidh3369/m3u
 // In-memory storage for multiple M3U URLs (starts with default)
 let playlistUrls = [DEFAULT_VOD_PLAYLIST_URL];
 
-// Manifest (with added stremioAddonsConfig for signature)
+// Manifest (added configurable: true to show configure button in Stremio addons list)
 const manifest = {
     id: "org.vodplaylist",
-    version: "1.0.3",
+    version: "1.0.3", // Bumped for changes
     name: "SID VOD Playlist",
     description: "Watch your personal video playlist with reload and configure options",
     resources: ["catalog", "meta", "stream"],
@@ -30,12 +30,8 @@ const manifest = {
     icon: "https://dl.strem.io/addon-logo.png",
     background: "https://dl.strem.io/addon-background.jpg",
     behaviorHints: {
-        configurable: true,
+        configurable: true, // Enables configure gear icon in Stremio
         configurationRequired: false
-    },
-    stremioAddonsConfig: { // <-- Added here
-        issuer: "https://stremio-addons.net",
-        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..JW4q64pqr0-IqzI-be5dVw.o6hTt07qtJsM86dzHCbJ12JRN81iVYpyqcrrXOOVnqmBEHD2J2Oeo9TpYaxtV9UjgLizHF4W2hkIjjvz46ftbkC1sLfcCPvIaO7kkq_XO9A9UncISdPMfJLGorL9ngmc.Y26jBejNzwLBxhMYx-V20g"
     }
 };
 
